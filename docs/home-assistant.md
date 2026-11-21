@@ -1,6 +1,6 @@
 # Home Assistant integration — verified configuration
 
-**Status: confirmed working on both plugs, 24 October 2026.** This records what was done in one installation, not a guarantee for all TCP-branded firmware revisions.
+**Status: both plugs integrated on 24 October 2026; cloud-independent control verified 21 November 2026.** This records what was done in one installation, not a guarantee for all TCP-branded firmware revisions.
 
 ## Server architecture
 
@@ -40,7 +40,7 @@ The device credentials were entered privately through Home Assistant's UI. The o
 - Stop the vendor app while pairing/configuring in LocalTuya if simultaneous sessions cause issues. The original app was deliberately stopped during the initial setup.
 - Secure your HA configuration/backups appropriately: local keys are credentials even when they are not submitted to a cloud API.
 - If a future factory reset/re-pair rotates a key, existing HA configuration may need updating.
-- The *command path* was local. A deliberate **internet-block test has not been done**, so do not infer every aspect of the original application or device behaviour is offline-independent.
+- **Cloud isolation tested on 21 November 2026:** With both TCP devices in an OPNsense `IOT_LOCAL_ONLY` IPv4 Internet-block alias, and after selectively clearing their existing connection states, the TCP mobile app reported both plugs offline. LocalTuya switching still worked for both through Home Assistant on the LAN and while accessing Home Assistant remotely over 4G/5G. This proves local operation without an active vendor-cloud connection in this test, not complete network egress isolation. See [OPNsense local-only policy](local-only-firewall.md).
 - No measured comparison was done for app vs Home Assistant response latency.
 
 ### DPS 2 countdown control (28 October 2026)
