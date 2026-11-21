@@ -1,6 +1,8 @@
 # Security, boundaries and public-release checklist
 
-This project investigates **personally owned smart plugs** through a user-controlled test environment. It does not require compromising a third-party account, rooting an everyday handset or distributing a proprietary OEM APK.
+This project documents **personally owned TCP Smart and Tapo P110 smart plugs** through a user-controlled test environment. The TCP investigation did not require compromising a third-party account, rooting an everyday handset or distributing a proprietary OEM APK. The Tapo installation used the official app and Home Assistant integration.
+
+**Public documentation includes sanitised, descriptive OPNsense settings, not actual exported firewall rules or a complete live network map.** The new Tapo and local-only policy guides omit real home IP/MAC details and vendor credentials.
 
 ## Keep private
 
