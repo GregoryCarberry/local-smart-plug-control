@@ -14,9 +14,17 @@
 
 For TCP Plug 2, the original TCP Smart app was open during a *separate* TinyTuya test and its icon tracked the relay's off/on transition. **This did not establish whether the vendor app learned the change through LAN, cloud notifications or polling.**
 
+## Cloud-isolation validation — 21 November 2026
+
+I added both TCP Smart devices to a reusable OPNsense `IOT_LOCAL_ONLY` alias alongside two Tapo P110 devices. The IoT interface applied an IPv4 block rule for alias members, below a local Pi-hole DNS exception and above the general Internet allow. After I cleared each TCP plug's existing matching firewall states, the TCP Smart mobile app reported **both offline**.
+
+**Home Assistant LocalTuya on/off continued working for both TCP plugs** while the vendor app showed them offline. I also tested all four plugs through Home Assistant on the LAN and while reaching Home Assistant over 4G/5G. The remote test uses HA's access path, **not a live connection to the vendor's cloud**.
+
+This is a successful test of LocalTuya operation **without an active manufacturer-cloud connection**. It does not establish zero possible outbound traffic, long-term resilience, measured response latency or offline behaviour of the plug's countdown/weekly schedule. OPNsense IoT IPv6 configuration was verified as `None`. Local DNS to Pi-hole remained allowed. The [reusable firewall procedure](local-only-firewall.md) documents the rule order, state clearing, verification and rollback.
+
 ## Open questions — not completion criteria
 
-1. **Offline operation:** preserve LAN connectivity and selectively block internet access to a test plug via the existing firewall. Compare HA switching, status updates, vendor-app behaviour and reconnection. Record rules and rollback. *Not performed yet.*
+1. **Long-term offline reliability:** immediate cloud-independent operation has now been verified (21 November; see below). Reboot, prolonged isolation, reconnection and firmware-update behaviour remain untested.
 2. **Latency:** compare controlled repetitions of vendor-app and Home Assistant commands. Define start and end events and account for phone UI and Wi-Fi variability. Perceived improvements have not yet been benchmarked.
 3. **Firmware variation:** test other hardware/firmware revisions individually before claiming compatibility.
 4. **Weekly timer scheduling and offline behaviour:** investigate where recurring schedules execute and whether the confirmed DPS 2 countdown completes with cloud connectivity blocked. DPS 2 has now been identified for TCP Plug 2; see experiment below.
