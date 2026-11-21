@@ -1,155 +1,76 @@
-# Recovering local control of two TCP Smart Wi-Fi plugs
+# Local smart plug control with Home Assistant
 
-Two old Wi-Fi smart plugs. One goal: **control them from Home Assistant without resetting them or losing their existing setup.**
+I started with two older **TCP Smart Wi-Fi plugs** that I wanted to control through Home Assistant without resetting or re-pairing them. Getting there took network troubleshooting, Android emulator analysis and Python to recover the information needed for encrypted local control.
 
-What seemed like a simple smart-home project turned into an investigation involving network traffic, an Android test emulator and Python. I eventually recovered the information needed for direct local control and confirmed that **both plugs worked in Home Assistant** while keeping their original TCP Smart app pairing.
+Later I added **two TP-Link Tapo P110 plugs**. Those were far more straightforward: I used the official Tapo app to set them up, enabled third-party compatibility and added them through Home Assistant's built-in TP-Link integration.
 
-**Result:** 2 out of 2 plugs working, confirmed 24 October 2026. Home Assistant could send commands directly across my local network; I have **not yet tested what happens if internet access is blocked completely**.
+By **21 November 2026**, all four plugs were working through Home Assistant while their manufacturers' apps showed them **offline**. A reusable OPNsense rule now blocks their outbound IPv4 Internet connections. I tested Home Assistant control both from my home network and while accessing Home Assistant over 4G/5G.
 
-> This is a documented investigation of my own equipment, not a ready-made key-recovery guide. The four historical Python scripts are [sanitised archival copies](scripts/original-sanitised/) with private identifiers removed. The [separate example script](examples/local_switch_check.py) is reconstructed and read-only unless switching is explicitly requested.
+This repository is the record of what worked, what didn't and how I verified the result. It is **not** a universal plug-unlocking tool or an export of my live home network.
 
 ## Where to start
 
-- **[The investigation](docs/investigation.md):** what I tried, what failed, and what eventually worked.
-- **[Home Assistant integration](docs/home-assistant.md):** how I added both plugs to my existing installation.
-- **[Results and limitations](docs/validation.md):** what I verified and what still needs testing.
-- **[Read-only DPS monitor](examples/monitor_dps.py):** safely observe device datapoints such as the countdown timer.
-- **[Original sanitised scripts](scripts/original-sanitised/):** historical source files, not plug-and-play tools.
-- **[Command history and evidence index](docs/cli-index.md):** recovered commands, reconstructed examples and source limitations.
-
-## A few terms used below
-
-- **Home Assistant (HA):** open-source software for controlling smart-home devices together.
-- **LAN:** local area network — devices communicating within the home rather than sending every command through a manufacturer's cloud service.
-- **VLAN:** a way to separate groups of devices on the same physical network; my IoT (smart-device) equipment has its own network.
-- **ADB:** Android Debug Bridge, used to inspect and troubleshoot the test Android installation.
-- **OEM app:** the manufacturer's original TCP Smart application.
-- **DPS:** a Tuya device's numbered data point; **DPS 1** is the on/off switch state. A later test identified **DPS 2** as the countdown-to-toggle (seconds) on TCP Plug 2.
-- **Local key:** a private per-device value needed to authenticate encrypted local commands.
-
-## The problem
-
-I had two older TCP Smart Wi-Fi plugs that still worked in their original Android app. I wanted them in my Home Assistant setup, controlled **directly on my LAN**, while retaining the existing pairing. A factory reset or moving them to another app would have been easier, but it would not have answered the technical question.
-
-The first obstacle wasn't connectivity: both plugs were reachable locally. For encrypted on/off commands, however, each plug required its own 16-character local key, which the OEM app did not expose.
-
-## Outcome at a glance
-
-| Requirement | Verified result |
+| Guide | What you'll find |
 | --- | --- |
-| Read relay states without changing the devices | Yes — TinyTuya protocol 3.1 reported DPS 1 on both plugs |
-| Recover candidate local keys without re-pairing | Yes — using an inspectable emulator and targeted runtime diagnostics |
-| Prove encrypted local on/off control | Yes — independently tested on both devices |
-| Preserve original TCP Smart pairing | Yes |
-| Show the original app reflecting an external relay change | Yes — observed for the TCP Plug 2 |
-| Integrate with Home Assistant | Yes — both working as LocalTuya switch entities |
-| Configure Tuya Cloud API credentials in Home Assistant | **Not required** |
-| Prove operation with all internet/cloud access blocked | **Not yet tested** |
-| Quantify response-time improvement | **Not yet measured** |
+| **[TCP Smart investigation](docs/tcp-case-study.md)** | The original local-key recovery story, dead ends, safe example scripts and Home Assistant LocalTuya setup |
+| **[Tapo P110 setup](docs/tapo-p110.md)** | A browser-led integration using the official TP-Link Smart Home integration, with initial provisioning in the mobile app |
+| **[OPNsense local-only policy](docs/local-only-firewall.md)** | A reusable firewall alias, safe rule ordering, state clearing, cloud-disconnection tests and rollback |
+| [Evidence and remaining work](docs/validation.md) | Which TCP tests passed, and which related behaviours remain untested |
+| [Security and redaction](docs/security.md) | What I deliberately kept out of the public repository |
 
-## Setup (sanitised)
+## The two integration paths
 
-- Two **TCP Smart** UK Wi-Fi plug models in the **TAFWISSINWUK** family, firmware compatible with **Tuya LAN protocol 3.1**.
-- **OPNsense** routing between a trusted/home-lab VLAN and an isolated IoT VLAN; both plugs reachable over **TCP/6668**.
-- **Lenovo Yoga / Debian 13** running **Home Assistant Container** under Docker Compose.
-- Windows workstation for Android Studio, ADB, inspection tooling and the initial Python checks.
-- Android Studio test emulator running the genuine OEM app, signed into the existing account; **the everyday handset was not rooted**.
+| | Older TCP Smart plugs | Tapo P110 plugs |
+| --- | --- | --- |
+| Quantity tested | 2 | 2 |
+| Home Assistant integration | **LocalTuya** (custom) | **TP-Link Smart Home** (built-in) |
+| Initial challenge | Encrypted LAN commands required device-specific local keys | Enable third-party compatibility, add each plug by its reserved IP |
+| Local-key extraction | Needed for this particular setup | **Not needed** for this setup |
+| HA switching after cloud disconnection | **Verified** | **Verified** |
+| Sensor data | Relay state; a local countdown datapoint on one TCP plug | Current, voltage, power, daily/monthly energy entities |
+| Manufacturer app during final test | Reported both offline | Reported both offline |
+
+The **TCP Smart local-key recovery** used an isolated, user-controlled Android emulator. Four sanitised historical scripts are retained under [`scripts/original-sanitised/`](scripts/original-sanitised/); [`examples/local_switch_check.py`](examples/local_switch_check.py) and [`examples/monitor_dps.py`](examples/monitor_dps.py) are separate, sanitised examples. None contains working device keys or private accounts.
+
+## How the final setup fits together
+
+Home Assistant runs as a container on a Debian host, separately routed from a dedicated IoT VLAN. The firewall permits Home Assistant to initiate connections to the plugs but blocks new Internet connections initiated by selected IoT devices.
 
 ```mermaid
 flowchart LR
-    Phone[Phone / Home Assistant UI] --> HA[Home Assistant on Debian / Docker]
-    HA --> LT[LocalTuya]
-    LT --> FW[OPNsense / VLAN routing]
-    FW --> A[TCP Plug 2]
-    FW --> B[TCP Plug 1]
-    style HA fill:#e8f0fe,stroke:#6c8ebf,color:#17202a
+    Client[Local or remote HA client] --> HA[Home Assistant on Debian]
+    HA --> FW[OPNsense / inter-VLAN routing]
+    FW --> LT[TCP Smart x2 via LocalTuya]
+    FW --> TP[Tapo P110 x2 via TP-Link integration]
+    FW -. outbound Internet blocked for selected plugs .-> Cloud[Manufacturer cloud]
 ```
 
-The arrows show the *command path tested in Home Assistant*. The original OEM app remained paired separately; its cloud/LAN status-update mechanism wasn't conclusively traced.
+The diagram shows the **observed Home Assistant control path**, not a claim about every packet or transport used by the device firmware. Remote phone access reaches **Home Assistant**, not the manufacturer cloud.
 
-## How I approached it
+I created the OPNsense host alias **`IOT_LOCAL_ONLY`**, grouped the four plugs' **DHCP-reserved IP addresses**, and used a single IPv4 block rule:
 
-1. **Establish the basics.** Confirm model identifiers, network addresses, reachability and local protocol behaviour using packet captures, a TCP connection test and TinyTuya status requests.
-2. **Separate read from write.** Protocol 3.1 returned the two plugs' relay status with an empty local key. That did **not** permit encrypted on/off control.
-3. **Investigate the OEM Android app.** Used ADB to retrieve its installed APK components; confirmed Tuya/ThingClips SDK references to local-key handling. APK inspection alone did not reveal the account's individual device keys.
-4. **Test, then discard unsuccessful approaches.** Investigated app storage and MMKV; tested **Frida** attachment in a rooted Android Studio emulator. Frida consistently terminated the app at attachment, before any instrumentation script ran. The cause was not established.
-5. **Change method.** Used targeted, *read-only* inspection of the **running app's mapped memory inside the rooted emulator**. Searched around known device identifiers for device records, associated 16-character `localKey` candidates with the correct IDs by parsing their **same JSON object**, and saved the results privately. Mere string matches were never treated as proof.
-6. **Validate against physical hardware.** A Python/TinyTuya check issued local commands to each plug and observed their response. On the TCP Plug 2, the script restored its original state and I saw it switch off and back on. The TCP Smart app also reflected the externally initiated state change.
-7. **Integrate into Home Assistant.** Installed **LocalTuya** as a custom integration, skipped Tuya Cloud API account configuration, manually added each device using its own recovered key, selected **protocol 3.1**, and mapped **DPS 1** to a switch. Both plugs worked in HA; TCP Plug 2 was also tested from my phone.
+> **Block Internet - Local-Only IoT Devices**
 
-Detailed notes: [Investigation and failed approaches](docs/investigation.md) · [Home Assistant configuration](docs/home-assistant.md) · [Evidence and remaining tests](docs/validation.md).
+The IoT interface was configured with IPv6 set to **None**. An existing higher-priority rule continued to allow queries to a local Pi-hole DNS server. For exact steps and caveats, see the [firewall guide](docs/local-only-firewall.md).
 
-## Reconstructed local test example
+## What I actually tested
 
-[`examples/local_switch_check.py`](examples/local_switch_check.py) is a deliberately **safe-by-default** TinyTuya example inspired by the final verification stage. It reads the relay state by default and **does not switch anything** unless `--toggle` is explicitly supplied. When asked to toggle, it attempts to restore the original state even if the test fails.
+1. **TCP Smart:** recovered and matched per-device keys on my own paired equipment, proved direct LAN switching, then added both devices to LocalTuya without configuring a Tuya Cloud API account.
+2. **Tapo P110:** added both manually through Home Assistant, confirmed switching and the available power/energy sensor entities. A supervised load test on **one** P110 produced plausible power readings of approximately **700 W, 1,000 W and 1,700 W** at three radiator settings. This was not a calibration of accumulated kWh.
+3. **Network isolation:** applied the OPNsense Internet block, cleared the plugs' old firewall states where necessary and observed vendor apps show all four devices offline.
+4. **Home Assistant after isolation:** switching remained functional for **all four plugs**, and the Tapo sensors continued reporting. I also tested HA control over the home LAN and by connecting to HA over **4G/5G**.
+5. **Still open:** long-term restart/offline resilience, measured response times, cumulative energy accuracy, cloud-free execution of the TCP countdown and any weekly schedule, and Home Assistant energy-history dashboards.
 
-```bash
-python -m pip install -r requirements.txt
-python examples/local_switch_check.py
-# Explicitly opt in to a brief physical switch test:
-python examples/local_switch_check.py --toggle
-```
+This confirms that **Home Assistant control did not require an active vendor-cloud connection in the tested configuration**. It does not establish zero external information exchange under every possible configuration.
 
-You'll be prompted for the device ID, LAN address and private key. The key is entered through a non-echoing prompt. **Use a safe test load:** a plug can interrupt mains power to connected equipment.
+## Security and limitations
 
-This sample deliberately avoids hard-coded real device IDs, addresses or keys. For the actual project, private key material was kept in a local Windows file; it was **not** committed to GitHub.
+- This project documents equipment I own and am authorised to test.
+- No real IP addresses, MAC addresses, cloud credentials, Tuya local keys, device IDs, Wi-Fi names, live firewall exports or emulator memory dumps are published.
+- New devices and firmware versions may differ. Add a new model to a cloud-blocking rule only after verifying its local integration.
+- A vendor app reporting a plug offline is expected when its cloud access is restricted. Firmware upgrades and cloud-only features may require temporary Internet access.
+- Smart plugs switching heaters and other high-load equipment require appliance-specific safety precautions; use a small non-heating test load when demonstrating switching.
 
-## Read-only datapoint monitor
+See the [changelog](CHANGELOG.md) for the original October investigation and the November extension to two manufacturers.
 
-The [sanitised countdown-observation monitor](examples/monitor_dps.py) is a separate, **read-only** TinyTuya example. It prompts for the device ID, LAN address, protocol version and local key (hidden input); no identifiers or keys are hard-coded or saved. It polls `status()` every ten seconds by default, printing datapoint values with local timestamps. It has no relay-toggle command.
-
-```bash
-python -m pip install -r requirements.txt
-python examples/monitor_dps.py
-# Optional: poll every five seconds
-python examples/monitor_dps.py --interval 5
-```
-
-This published script is a **sanitised adaptation**, not the original private Windows monitor, which read its credentials from a local JSON file. The original was used in the [28 October countdown experiment](docs/validation.md#countdown-datapoint-experiment--28-october-2026). If another controller (such as Home Assistant LocalTuya) maintains a device connection, status polling may fail; investigate rather than assuming an incorrect key. Do not enter private keys in terminal transcripts or screenshots.
-
-
-### Home Assistant countdown control (28 October 2026)
-
-The LocalTuya Number entity for DPS 2 correctly displays a countdown on TCP Plug 2. A `number.set_value` request of 60 was accepted by Home Assistant but did not change the timer. The `localtuya.set_dp` action writing integer 60 to DPS 2 worked: the displayed value progressed 60 → 30 → 0 and the relay toggled automatically. The cause of the Number write failure is still unknown. A direct write of zero to cancel the timer and a convenient dashboard interface are proposed follow-ups, not completed work. Full observations: [validation notes](docs/validation.md#home-assistant-countdown-control--28-october-2026).
-
-## What this demonstrates
-
-- Breaking a problem into reachability, status, authentication, control and integration stages.
-- Network diagnosis across VLANs, including TCP/6668 and source/destination reasoning.
-- Android app analysis with ADB and an isolated emulator.
-- Recording dead ends without inventing explanations for them.
-- A testable recovery hypothesis: matching the right candidate value to the right device record.
-- Validation at both software and physical layers.
-- Handling recovered credentials responsibly and publishing only sanitised evidence.
-
-## Limitations and follow-up
-
-- **No deliberate cloud-blocking test yet.** The LocalTuya commands are sent directly over the LAN, but I have not yet measured behaviour after completely blocking these devices from the internet.
-- **Latency is anecdotal.** Home Assistant subjectively seemed quicker than the original app, but I haven't captured controlled timings; nor did I independently confirm the original app's command path.
-- **Protocol and firmware are device-dependent.** Identical branding does not guarantee other revisions work the same way. Different devices also have different keys.
-- **Countdown datapoint tested 28 October 2026.** On TCP Plug 2, DPS 2 reports the OEM countdown-to-toggle in seconds, with 30-second reported steps; a one-minute timer ended with an automatic DPS 1 toggle and DPS 2 resetting to zero. Weekly schedule storage and cloud-offline operation remain untested. See [timestamped evidence](docs/validation.md#countdown-datapoint-experiment--28-october-2026).
-
-The countdown investigation also showed that disabling the device in Home Assistant did not release the TinyTuya connection, while temporarily stopping the HA container allowed read-only polling. This is evidence of a local-controller connection conflict, not a proven protocol limitation. HA restoration after testing was advised but has not yet been independently confirmed.
-
-## Tools and references
-
-- [TinyTuya](https://github.com/jasonacox/tinytuya) — direct LAN status/control for Tuya-compatible devices.
-- [LocalTuya](https://github.com/rospogrigio/localtuya) — Home Assistant local integration, optional Tuya cloud account.
-- Android Studio emulator, ADB, Frida (unsuccessful attachment), Wireshark/packet capture, Python, Docker, Home Assistant, OPNsense.
-
-## Security and publishing
-
-See [Security and redaction checklist](docs/security.md). Do **not** upload real keys, cloud credentials, APKs, proprietary app data, RAM dumps, screenshots showing a `local key` field, personal network details, or device identifiers. Only investigate devices/accounts you own or are authorised to test.
-
-For the source-code provenance, see [Source provenance and limitations](docs/source-provenance.md).\n\n**Project record:** initial investigation 20–21 October 2026; Home Assistant integration verified 24 October 2026.
-
-## Recovered original command material (October 2026)
-
-- [Recovered safe CLI excerpts](docs/recovered-cli-safe-excerpts.md): commands copied from the 224-position conversation archive, with private identifiers redacted. These are individual historical snippets, **not** a runnable installation script.
-- [Original Home Assistant Compose service](config/homeassistant/compose.example.yml): deployment YAML retrieved from the conversation.
-- [Source provenance and publication limitations](docs/source-provenance.md): what was recovered, what remains private, and a known mismatch in the original LAN-switch script.
-- [CLI investigation journal](docs/cli-command-journal.md): explanatory documentation including **illustrative** commands; this is distinct from the historical excerpt collection.
-
-**Original Python sources:** Four sanitised original scripts are published in [scripts/original-sanitised](scripts/original-sanitised/). They contain placeholders and are historical artefacts, not ready-to-run tools. The original LAN-switch script's device-label mismatch has been normalised to TCP Plug 1 (the target defined by its device constants). It remains archival and untested after sanitisation.
-
-The 37 public historical code/output blocks are in [recovered safe CLI excerpts](docs/recovered-cli-safe-excerpts.md); [the remaining 27 blocks have been reviewed individually](docs/excluded-blocks-review.md) and retained in the private archive. Accounting covers all 64 without publishing sensitive emulator diagnostics or trivial outputs.
+**Project dates:** TCP investigation and Home Assistant integration in October 2026; Tapo P110 integration and verified cloud-independent operation of all four plugs on **21 November 2026**.
