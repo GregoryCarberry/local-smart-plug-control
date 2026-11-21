@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-11-21 — Local-only control verified for four plugs
+
+- Expanded the project to include **two Tapo P110** devices via Home Assistant's built-in TP-Link Smart Home integration, including third-party compatibility and manual IP-based device addition.
+- Added a reusable OPNsense `IOT_LOCAL_ONLY` alias and IPv4 Internet-blocking policy. Two Tapo P110s and both TCP Smart plugs were grouped in the same alias after verifying their local control paths.
+- Cleared selected existing states so the block took effect. Both manufacturers' mobile apps reported their respective plugs offline; all four continued switching via Home Assistant on the LAN and over remote HA access on 4G/5G.
+- Verified Tapo power readings against an attended three-level load (approximately 700/1,000/1,700 W). Long-term kWh accuracy and charting were not tested.
+- Reworked the root README into a multi-brand entry point, kept the original TCP investigation in `docs/tcp-case-study.md`, and added Tapo and OPNsense walkthroughs. The repository itself has **not yet been renamed**.
+
+
 ## 2026-10-25 — Reader-focused editorial pass
 
 - Reworked the README opening into a plain-English explanation of the problem, solution and untested cloud-isolation question.
